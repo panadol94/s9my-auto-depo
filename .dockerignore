@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+README.md
+LICENSE
+.vscode
+.idea

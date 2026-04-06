@@ -1,0 +1,14 @@
+services:
+  bot:
+    build: .
+    container_name: s9my-auto-deposit-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
