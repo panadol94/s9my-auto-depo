@@ -1,14 +1,15 @@
 """
 S9MY Auto Deposit Bot
 Telegram bot untuk 99LAJU Auto Deposit System
+Full button-to-button flow
 """
 
 import os
-import json
+import uuid
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -18,466 +19,482 @@ from telegram.ext import (
     filters,
 )
 
-# Load env
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = [int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") if id.strip()]
+ADMIN_IDS = [int(i.strip()) for i in os.getenv("ADMIN_IDS", "").split(",") if i.strip()]
 MIN_DEPOSIT = int(os.getenv("MIN_DEPOSIT", "30"))
 
 BANK_AFFIN = {
     "name": os.getenv("BANK_AFFIN_NAME", "FARHAN CATERING ENTERPRISE"),
     "account": os.getenv("BANK_AFFIN_ACCOUNT", "100180018799"),
 }
-
 BANK_RHB = {
     "name": os.getenv("BANK_RHB_NAME", "FARHAN CATERING ENTERPRISE"),
     "account": os.getenv("BANK_RHB_ACCOUNT", "25305200039496"),
 }
 
-# Logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+AFFILIATE_LINK = os.getenv("AFFILIATE_LINK", "https://99laju.net/register?affiliate=911295")
+
+# ============ STORAGE ============
+registered_users = {}   # user_id -> {"username": ..., "registered_at": ...}
+user_deposits = {}      # user_id -> {"step": ..., "data": {...}}
+pending_deposits = {}   # deposit_id -> {"user_id": ..., "data": {...}, "status": ...}
+
+# ============ PERSISTENT BOTTOM KEYBOARD ============
+
+def kb_reply():
+    """Persistent reply keyboard at bottom of chat"""
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton("🏠 Menu Utama"), KeyboardButton("Auto Deposit 💰")]],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
 # ============ KEYBOARDS ============
 
-def main_menu_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
+def kb_main_menu():
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("💰 Auto Deposit", callback_data="auto_deposit")],
         [InlineKeyboardButton("🧼 Cara Cuci", callback_data="cara_cuci")],
-        [InlineKeyboardButton("🎮 Game ID", callback_data="game_id")],
+        [InlineKeyboardButton("🎮 Cari Game ID", callback_data="game_id")],
         [InlineKeyboardButton("🎁 Claim Promotion", callback_data="claim_promo")],
-        [InlineKeyboardButton("📊 Customer Winning Record", callback_data="winning_record")],
+        [InlineKeyboardButton("📊 Winning Record", callback_data="winning_record")],
         [InlineKeyboardButton("💬 Hubungi CS", callback_data="hubungi_cs")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    ])
 
-def home_menu_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("🏘 Home Menu", callback_data="menu_utama")],
+def kb_home():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
+    ])
+
+def kb_home_deposit():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
         [InlineKeyboardButton("💰 Auto Deposit", callback_data="auto_deposit")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    ])
 
-def bank_selection_keyboard():
-    keyboard = [
+def kb_amounts():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("RM30", callback_data="amt_30"), InlineKeyboardButton("RM50", callback_data="amt_50")],
+        [InlineKeyboardButton("RM100", callback_data="amt_100"), InlineKeyboardButton("RM200", callback_data="amt_200")],
+        [InlineKeyboardButton("RM500", callback_data="amt_500"), InlineKeyboardButton("RM1000", callback_data="amt_1000")],
+        [InlineKeyboardButton("✏️ Custom Amount", callback_data="amt_custom")],
+        [InlineKeyboardButton("🔙 Back", callback_data="menu_utama")],
+    ])
+
+def kb_banks():
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("🏦 Affin Bank", callback_data="bank_affin")],
         [InlineKeyboardButton("🏦 RHB Bank", callback_data="bank_rhb")],
         [InlineKeyboardButton("🔙 Back", callback_data="auto_deposit")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    ])
 
-def promo_selection_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("👑 Dep RM50 Free RM60 (120% Welcome)", callback_data="promo_rm50")],
-        [InlineKeyboardButton("👑 Dep RM100 Free RM120 (120% Welcome)", callback_data="promo_rm100")],
-        [InlineKeyboardButton("1️⃣ 1st Dep - 50% Welcome Bonus", callback_data="promo_1st_50")],
-        [InlineKeyboardButton("2️⃣ 2nd Dep - 100% Welcome Bonus", callback_data="promo_2nd_100")],
+def kb_promos():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👑 RM50 Free RM60 (120%)", callback_data="promo_rm50")],
+        [InlineKeyboardButton("👑 RM100 Free RM120 (120%)", callback_data="promo_rm100")],
+        [InlineKeyboardButton("1️⃣ 1st Dep - 50% Welcome", callback_data="promo_1st_50")],
+        [InlineKeyboardButton("2️⃣ 2nd Dep - 100% Welcome", callback_data="promo_2nd_100")],
         [InlineKeyboardButton("🧧 15% Daily Bonus", callback_data="promo_daily_15")],
-        [InlineKeyboardButton("💰 6% Unlimited Bonus", callback_data="promo_unlimited_6")],
-        [InlineKeyboardButton("💰 10% Unlimited Bonus (10pm-6am)", callback_data="promo_unlimited_10")],
-        [InlineKeyboardButton("🍀 No Claim Promo (x1 Turnover)", callback_data="promo_no_claim")],
+        [InlineKeyboardButton("💰 6% Unlimited", callback_data="promo_unlimited_6")],
+        [InlineKeyboardButton("💰 10% Unlimited (10pm-6am)", callback_data="promo_unlimited_10")],
+        [InlineKeyboardButton("🍀 No Claim (x1 TO)", callback_data="promo_no_claim")],
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_bank")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    ])
 
-def confirmation_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("✅ Confirm & Upload Resit", callback_data="confirm_deposit")],
-        [InlineKeyboardButton("🔙 Cancel", callback_data="auto_deposit")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+def kb_cs_actions(dep_id):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Approve", callback_data=f"cs_approve_{dep_id}"),
+            InlineKeyboardButton("❌ Reject", callback_data=f"cs_reject_{dep_id}"),
+        ],
+    ])
 
-def cs_action_keyboard(deposit_id):
-    keyboard = [
-        [InlineKeyboardButton("✅ Approve", callback_data=f"cs_approve_{deposit_id}")],
-        [InlineKeyboardButton("❌ Reject", callback_data=f"cs_reject_{deposit_id}")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+PROMO_NAMES = {
+    "promo_rm50": "👑 120% Welcome (RM50→Free RM60)",
+    "promo_rm100": "👑 120% Welcome (RM100→Free RM120)",
+    "promo_1st_50": "1️⃣ 1st Dep 50% Welcome",
+    "promo_2nd_100": "2️⃣ 2nd Dep 100% Welcome",
+    "promo_daily_15": "🧧 15% Daily Bonus",
+    "promo_unlimited_6": "💰 6% Unlimited",
+    "promo_unlimited_10": "💰 10% Unlimited (10pm-6am)",
+    "promo_no_claim": "🍀 No Claim (x1 TO)",
+}
 
-# ============ USER DATA STORAGE ============
+# ============ HELPERS ============
 
-# In-memory storage for deposit flows
-user_deposits = {}  # user_id -> deposit data
+def get_or_init_deposit(user_id, step="amount"):
+    if user_id not in user_deposits:
+        user_deposits[user_id] = {"step": step, "data": {}}
+    if user_id in registered_users:
+        user_deposits[user_id]["data"]["username"] = registered_users[user_id]["username"]
+    return user_deposits[user_id]
 
 # ============ HANDLERS ============
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start command - show welcome and main menu"""
-    welcome_text = """🎰 ✨ SELAMAT DATANG KE S9MY! ✨ 🎰
-🤖 Auto Deposit Bot — Laju, Mudah, 24/7!
+    user_id = update.message.from_user.id
 
-🏆 KENAPA PILIH S9MY? 🏆
-✅ Deposit dalam 1 Minit ⚡
-✅ Cashout dalam 3 Minit 💨
-✅ Online 24/7 🌐
-✅ Promo Terbaik Setiap Hari 🔥
-
-👇 Pilih pilihan di bawah:"""
-
-    await update.message.reply_text(welcome_text, reply_markup=main_menu_keyboard())
+    if user_id in registered_users:
+        name = registered_users[user_id]["username"]
+        await update.message.reply_text(
+            f"🎰 ✨ SELAMAT KEMBALI, {name}! ✨ 🎰\n"
+            f"🤖 Auto Deposit Bot — Laju, Mudah, 24/7!\n\n👇 Pilih pilihan di bawah:",
+            reply_markup=kb_main_menu()
+        )
+        # Send persistent bottom keyboard
+        await update.message.reply_text("⬇️", reply_markup=kb_reply())
+    else:
+        user_deposits[user_id] = {"step": "register", "data": {}}
+        await update.message.reply_text(
+            f"🆕 Daftar Sekarang di sini 👇\n"
+            f"🔗 {AFFILIATE_LINK}\n\n"
+            f"🧑 Sila masukkan Username 99LAJU anda :",
+            reply_markup=kb_reply()
+        )
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """🆘 Bantuan
-
-Guna menu di bawah untuk:
-• 💰 Auto Deposit - Deposit dana ke akaun
-• 🎮 Game ID - Dapatkan ID untuk main game
-• 🎁 Claim Promotion - Tuntut bonus
-• 💬 Hubungi CS - Berhubung dengan customer service
-
-Untuk bantuan lanjut, hubungi CS kami."""
-    await update.message.reply_text(help_text, reply_markup=home_menu_keyboard())
+    await update.message.reply_text(
+        "🆘 *BANTUAN S9MY*\n\n"
+        "• 💰 Auto Deposit — Deposit dana\n"
+        "• 🎮 Game ID — Dapatkan ID game\n"
+        "• 🎁 Claim Promo — Tuntut bonus\n"
+        "• 💬 Hubungi CS — Chat CS\n\n"
+        "Tekan /start untuk mula.",
+        parse_mode="Markdown", reply_markup=kb_home_deposit()
+    )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle all inline button callbacks"""
     query = update.callback_query
     await query.answer()
-    
     data = query.data
     user_id = query.from_user.id
-    
-    # ========== MENU UTAMA ==========
+
+    # --- MENU UTAMA ---
     if data == "menu_utama":
-        welcome_text = """🏠 MENU UTAMA
+        name = registered_users.get(user_id, {}).get("username", "")
+        label = f"👤 {name}\n\n" if name else ""
+        await query.edit_message_text(f"🏠 MENU UTAMA\n\n{label}Sila pilih:", reply_markup=kb_main_menu())
 
-Sila pilih:"""
-        await query.edit_message_text(welcome_text, reply_markup=main_menu_keyboard())
-    
-    # ========== AUTO DEPOSIT FLOW ==========
+    # --- AUTO DEPOSIT ---
     elif data == "auto_deposit":
-        user_deposits[user_id] = {"step": "username", "data": {}}
+        dep = get_or_init_deposit(user_id, "amount")
+        dep["step"] = "amount"
+        dep["data"] = {"username": dep["data"].get("username", "")}
         await query.edit_message_text(
-            "💰 **AUTO DEPOSIT**\n\nSila masukkan username akaun S9MY anda:",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="menu_utama")]])
+            f"💰 *AUTO DEPOSIT*\n\nMinimum deposit: RM{MIN_DEPOSIT}\nSila pilih jumlah deposit:",
+            parse_mode="Markdown", reply_markup=kb_amounts()
         )
-    
-    elif data == "cara_cuci":
-        await query.edit_message_text(
-            """🧼 **CARA CUCI (TURNOVER)**
 
-Cara untuk qualify bagi bonus:
-1. Buat deposit minima RM30
-2. Claim promo yang tersedia
-3. Main game sehingga jumlah turnover raggi
-4. BONUS akan masuk secara automatik
+    # --- AMOUNT BUTTONS ---
+    elif data.startswith("amt_"):
+        dep = get_or_init_deposit(user_id)
+        if data == "amt_custom":
+            dep["step"] = "custom_amount"
+            await query.edit_message_text(
+                f"✏️ *Custom Amount*\n\nTaipkan jumlah deposit (Min: RM{MIN_DEPOSIT}):",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="auto_deposit")]])
+            )
+        else:
+            amount = int(data.replace("amt_", ""))
+            dep["data"]["amount"] = amount
+            dep["step"] = "bank"
+            await query.edit_message_text(
+                f"✅ Amount: *RM{amount}*\n\n🏦 Pilih bank untuk transfer:",
+                parse_mode="Markdown", reply_markup=kb_banks()
+            )
 
-💡 Tips: Cek balik promo untuk syarat turnover.""",
-            parse_mode="Markdown",
-            reply_markup=home_menu_keyboard()
-        )
-    
-    elif data == "game_id":
-        await query.edit_message_text(
-            """🎮 **GAME ID**
-
-Untuk mendapatkan Game ID:
-1. Selesai deposit & approve
-2. Login ke website S9MY
-3. Pergi ke menu Game ID
-4. Pilih game & copy ID & PW
-5. Tekan Play Now untuk mula main
-
-📥 Download app: https://99laju.net/""",
-            parse_mode="Markdown",
-            reply_markup=home_menu_keyboard()
-        )
-    
-    elif data == "claim_promo":
-        await query.edit_message_text(
-            """🎁 **SEMUA PROMOSI**
-
-👑 120% Welcome Bonus (Dep RM50-Free RM60)
-👑 120% Welcome Bonus (Dep RM100-Free RM120)
-1️⃣ 1st Deposit - 50% Welcome Bonus
-2️⃣ 2nd Deposit - 100% Welcome Bonus
-🧧 15% Daily Bonus
-💰 6% Unlimited Bonus
-💰 10% Unlimited Bonus (10pm-6am)
-🍀 No Claim Promo (x1 Turnover)
-
-Pilih promo semasa deposit!""",
-            parse_mode="Markdown",
-            reply_markup=home_menu_keyboard()
-        )
-    
-    elif data == "winning_record":
-        await query.edit_message_text(
-            """📊 **CUSTOMER WINNING RECORD**
-
-Untuk tengok rekod kemenangan:
-• Login ke website S9MY
-• Pergi ke Profile/Wallet
-• Sini boleh tengok semua transaksi
-
-有任何问题? Hubungi CS kami!""",
-            parse_mode="Markdown",
-            reply_markup=home_menu_keyboard()
-        )
-    
-    elif data == "hubungi_cs":
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💬 Hubungi CS", url="https://t.me/m/4ujBD3wnZmI1")],
-            [InlineKeyboardButton("🏘 Home Menu", callback_data="menu_utama")],
-        ])
-        await query.edit_message_text(
-            "💬 **hubungungi CS**\n\nTekan button di bawah untuk chat dengan CS kami:",
-            parse_mode="Markdown",
-            reply_markup=keyboard
-        )
-    
-    # ========== BANK SELECTION ==========
-    elif data in ["bank_affin", "bank_rhb"]:
+    # --- BANK SELECTION ---
+    elif data in ("bank_affin", "bank_rhb"):
         bank = BANK_AFFIN if data == "bank_affin" else BANK_RHB
         bank_name = "Affin Bank" if data == "bank_affin" else "RHB Bank"
-        
-        user_deposits[user_id]["data"]["bank"] = bank_name
-        user_deposits[user_id]["data"]["bank_info"] = bank
-        
-        deposit_data = user_deposits[user_id]["data"]
-        
-        summary = f"""🏦 **Bank: {bank_name}**
+        dep = get_or_init_deposit(user_id)
+        dep["data"]["bank"] = bank_name
+        dep["data"]["bank_info"] = bank
+        dep["step"] = "promo"
+        amt = dep["data"].get("amount", "?")
+        await query.edit_message_text(
+            f"🏦 *DETAIL AKAUN BANK*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🏦 Bank: {bank_name}\n"
+            f"👤 Nama: `{bank['name']}`\n"
+            f"💳 Akaun: `{bank['account']}`\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Jumlah: *RM{amt}*\n\n"
+            f"⚠️ Transfer tepat jumlah di atas.\n\nPilih promosi anda:",
+            parse_mode="Markdown", reply_markup=kb_promos()
+        )
 
-Name: {bank['name']}
-Account: {bank['account']}
-
-💰 Amount: RM{deposit_data.get('amount', '?')}
-
-Sila transfer ke akaun di atas, kemudian upload screenshot resit."""
-
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Saya Dah Transfer", callback_data="confirm_deposit")],
-            [InlineKeyboardButton("🔙 Back", callback_data="auto_deposit")],
-        ])
-        
-        await query.edit_message_text(summary, parse_mode="Markdown", reply_markup=keyboard)
-    
     elif data == "back_to_bank":
         await query.edit_message_text(
-            "🏦 **Pilih Bank**\n\nSila pilih bank untuk transfer:",
-            parse_mode="Markdown",
-            reply_markup=bank_selection_keyboard()
+            "🏦 *Pilih Bank*\n\nSila pilih bank untuk transfer:",
+            parse_mode="Markdown", reply_markup=kb_banks()
         )
-    
-    # ========== PROMO SELECTION ==========
+
+    # --- PROMO SELECTION ---
     elif data.startswith("promo_"):
-        promo_names = {
-            "promo_rm50": "120% Welcome (RM50 Dep → Free RM60)",
-            "promo_rm100": "120% Welcome (RM100 Dep → Free RM120)",
-            "promo_1st_50": "1st Dep 50% Welcome Bonus",
-            "promo_2nd_100": "2nd Dep 100% Welcome Bonus",
-            "promo_daily_15": "15% Daily Bonus",
-            "promo_unlimited_6": "6% Unlimited Bonus",
-            "promo_unlimited_10": "10% Unlimited Bonus (10pm-6am)",
-            "promo_no_claim": "No Claim Promo (x1 Turnover)",
-        }
-        promo_name = promo_names.get(data, "Unknown")
-        user_deposits[user_id]["data"]["promo"] = promo_name
-        
-        deposit_data = user_deposits[user_id]["data"]
-        bank = deposit_data.get("bank_info", {})
-        bank_name = deposit_data.get("bank", "Unknown")
-        
-        summary = f"""📋 **Summary Deposit**
-
-👤 Username: {deposit_data.get('username', '?')}
-💰 Amount: RM{deposit_data.get('amount', '?')}
-🏦 Bank: {bank_name}
-🎁 Promo: {promo_name}
-
-🏦 Account:
-Name: {bank.get('name', '?')}
-Account: {bank.get('account', '?')}
-
-Sila transfer dan click button di bawah untuk upload resit."""
-
-        await query.edit_message_text(summary, parse_mode="Markdown", reply_markup=confirmation_keyboard())
-    
-    elif data == "confirm_deposit":
+        promo = PROMO_NAMES.get(data, "Unknown")
+        dep = get_or_init_deposit(user_id)
+        dep["data"]["promo"] = promo
+        dep["step"] = "upload_resit"
+        d = dep["data"]
+        bi = d.get("bank_info", {})
         await query.edit_message_text(
-            "📸 **Upload Resit**
-
-Sila upload screenshot resit transfer anda.",
+            f"📋 *RINGKASAN DEPOSIT*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Username: {d.get('username','?')}\n"
+            f"💰 Amount: RM{d.get('amount','?')}\n"
+            f"🏦 Bank: {d.get('bank','?')}\n"
+            f"🎁 Promo: {promo}\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🏦 Transfer ke:\n"
+            f"Nama: `{bi.get('name','?')}`\n"
+            f"Akaun: `{bi.get('account','?')}`\n\n"
+            f"📸 Sila upload screenshot resit transfer anda sekarang.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Cancel", callback_data="auto_deposit")]])
         )
-    
-    # ========== CS ACTIONS ==========
+
+    # --- INFO PAGES ---
+    elif data == "cara_cuci":
+        await query.edit_message_text(
+            "🧼 *CARA CUCI (TURNOVER)*\n\n"
+            "1️⃣ Deposit minima RM30\n2️⃣ Claim promo\n"
+            "3️⃣ Main game sehingga turnover dicapai\n4️⃣ BONUS masuk automatik\n\n"
+            "💡 Cek promo untuk syarat turnover.",
+            parse_mode="Markdown", reply_markup=kb_home_deposit()
+        )
+    elif data == "game_id":
+        await query.edit_message_text(
+            "🎮 *CARI GAME ID*\n\n"
+            "1️⃣ Deposit & approve\n2️⃣ Login website S9MY\n"
+            "3️⃣ Menu Game ID\n4️⃣ Copy ID & PW\n5️⃣ Play Now!\n\n"
+            "📥 Download: https://99laju.net/",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎮 Play Now", url="https://99laju.net/")],
+                [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
+            ])
+        )
+    elif data == "claim_promo":
+        await query.edit_message_text(
+            "🎁 *SEMUA PROMOSI S9MY*\n\n"
+            "👑 120% Welcome (RM50→Free RM60)\n"
+            "👑 120% Welcome (RM100→Free RM120)\n"
+            "1️⃣ 1st Dep — 50% Welcome\n2️⃣ 2nd Dep — 100% Welcome\n"
+            "🧧 15% Daily Bonus\n💰 6% Unlimited\n"
+            "💰 10% Unlimited (10pm-6am)\n🍀 No Claim (x1 TO)\n\n"
+            "💡 Pilih promo semasa deposit!",
+            parse_mode="Markdown", reply_markup=kb_home_deposit()
+        )
+    elif data == "winning_record":
+        await query.edit_message_text(
+            "📊 *WINNING RECORD*\n\n"
+            "1️⃣ Login website S9MY\n2️⃣ Profile → Wallet\n3️⃣ Semak transaksi\n\n"
+            "Ada soalan? Hubungi CS!",
+            parse_mode="Markdown", reply_markup=kb_home_deposit()
+        )
+    elif data == "hubungi_cs":
+        await query.edit_message_text(
+            "💬 *HUBUNGI CS*\n\nTekan button untuk chat CS:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💬 Chat CS", url="https://t.me/m/4ujBD3wnZmI1")],
+                [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
+            ])
+        )
+
+    # --- CS APPROVE ---
     elif data.startswith("cs_approve_"):
-        deposit_id = data.replace("cs_approve_", "")
+        dep_id = data.replace("cs_approve_", "")
         if user_id not in ADMIN_IDS:
             await query.answer("❌ Admin only!", show_alert=True)
             return
-        
-        success_msg = """✅ **Deposit Approved!**
+        if dep_id not in pending_deposits:
+            await query.answer("⚠️ Deposit not found.", show_alert=True)
+            return
+        dep = pending_deposits[dep_id]
+        dep["status"] = "approved"
+        d = dep["data"]
+        try:
+            await context.bot.send_message(
+                chat_id=dep["user_id"],
+                text=(
+                    f"✅ *DEPOSIT BERJAYA!* 🎉\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 Username: {d.get('username','?')}\n"
+                    f"💰 Amount: RM{d.get('amount','?')}\n"
+                    f"🎁 Promo: {d.get('promo','?')}\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"Sila login untuk dapatkan Game ID!\n"
+                    f"Semoga Bos menang beribu-ribu! 🍀"
+                ),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎮 Dapatkan Game ID", callback_data="game_id")],
+                    [InlineKeyboardButton("🎮 Play Now!", url="https://99laju.net/")],
+                    [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
+                ])
+            )
+        except Exception as e:
+            logger.error(f"Notify user failed: {e}")
+        await query.edit_message_caption(
+            caption=query.message.caption + f"\n\n✅ *APPROVED* at {datetime.now().strftime('%H:%M:%S')}",
+            parse_mode="Markdown"
+        )
 
-💰 Deposit anda telah berjaya diuruskan.
-Sila Login ke website kami untuk dapatkan Game ID anda.
-
-Semoga Bos menang beribu ribuan! 🍀"""
-
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏘 Home Menu", callback_data="menu_utama")],
-        ])
-        await query.edit_message_text(success_msg, parse_mode="Markdown", reply_markup=keyboard)
-        await query.answer("✅ Approved!")
-    
+    # --- CS REJECT ---
     elif data.startswith("cs_reject_"):
-        deposit_id = data.replace("cs_reject_", "")
+        dep_id = data.replace("cs_reject_", "")
         if user_id not in ADMIN_IDS:
             await query.answer("❌ Admin only!", show_alert=True)
             return
-        
-        reject_msg = """❌ **Deposit Rejected**
-
-‼️ Maaf, Deposit anda ada sikit masalah.
-Sila hubungi CS kami untuk urusan deposit anda 🙏"""
-
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💬 Hubungi CS", url="https://t.me/m/4ujBD3wnZmI1")],
-            [InlineKeyboardButton("🏘 Home Menu", callback_data="menu_utama")],
-        ])
-        await query.edit_message_text(reject_msg, parse_mode="Markdown", reply_markup=keyboard)
-        await query.answer("❌ Rejected!")
+        if dep_id not in pending_deposits:
+            await query.answer("⚠️ Deposit not found.", show_alert=True)
+            return
+        dep = pending_deposits[dep_id]
+        dep["status"] = "rejected"
+        try:
+            await context.bot.send_message(
+                chat_id=dep["user_id"],
+                text="❌ *DEPOSIT DITOLAK*\n\n‼️ Maaf, deposit ada masalah.\nSila hubungi CS. 🙏",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💬 Hubungi CS", url="https://t.me/m/4ujBD3wnZmI1")],
+                    [InlineKeyboardButton("💰 Cuba Lagi", callback_data="auto_deposit")],
+                    [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu_utama")],
+                ])
+            )
+        except Exception as e:
+            logger.error(f"Notify user failed: {e}")
+        await query.edit_message_caption(
+            caption=query.message.caption + f"\n\n❌ *REJECTED* at {datetime.now().strftime('%H:%M:%S')}",
+            parse_mode="Markdown"
+        )
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle text messages - username and amount input"""
     user_id = update.message.from_user.id
     text = update.message.text.strip()
-    
-    if user_id not in user_deposits:
+
+    # Handle persistent reply keyboard buttons
+    if text == "🏠 Menu Utama":
+        name = registered_users.get(user_id, {}).get("username", "")
+        label = f"👤 {name}\n\n" if name else ""
         await update.message.reply_text(
-            "Sila tekan /start untuk mula.",
-            reply_markup=main_menu_keyboard()
+            f"🏠 MENU UTAMA\n\n{label}Sila pilih:",
+            reply_markup=kb_main_menu()
         )
         return
-    
-    deposit = user_deposits[user_id]
-    step = deposit.get("step")
-    
-    if step == "username":
-        deposit["data"]["username"] = text
-        deposit["step"] = "amount"
-        
+    elif text == "Auto Deposit 💰":
+        dep = get_or_init_deposit(user_id, "amount")
+        dep["step"] = "amount"
+        dep["data"] = {"username": dep["data"].get("username", "")}
         await update.message.reply_text(
-            f"✅ Username: **{text}**\n\n💰 Masukkan jumlah deposit (Min: RM{MIN_DEPOSIT}):",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="auto_deposit")]])
+            f"💰 *AUTO DEPOSIT*\n\nMinimum deposit: RM{MIN_DEPOSIT}\nSila pilih jumlah deposit:",
+            parse_mode="Markdown", reply_markup=kb_amounts()
         )
-    
-    elif step == "amount":
+        return
+
+    if user_id not in user_deposits:
+        await update.message.reply_text("Sila tekan /start untuk mula.", reply_markup=kb_reply())
+        return
+
+    dep = user_deposits[user_id]
+    step = dep.get("step")
+
+    if step == "register":
+        registered_users[user_id] = {"username": text, "registered_at": datetime.now().isoformat()}
+        user_deposits.pop(user_id, None)
+        await update.message.reply_text(
+            f"✅ *Berjaya Didaftarkan!*\n\n👤 Username: *{text}*\n\nSelamat datang ke S9MY! 🎰\nPilih pilihan di bawah:",
+            parse_mode="Markdown", reply_markup=kb_main_menu()
+        )
+        await update.message.reply_text("⬇️", reply_markup=kb_reply())
+
+    elif step == "custom_amount":
         try:
             amount = int(text)
             if amount < MIN_DEPOSIT:
                 await update.message.reply_text(
-                    f"❌ Minimum deposit adalah RM{MIN_DEPOSIT}. Sila masukkan semula:",
+                    f"❌ Minimum RM{MIN_DEPOSIT}. Cuba lagi:",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="auto_deposit")]])
                 )
                 return
-            
-            deposit["data"]["amount"] = amount
-            deposit["step"] = "done"
-            
-            # Show bank selection
+            dep["data"]["amount"] = amount
+            dep["step"] = "bank"
             await update.message.reply_text(
-                f"✅ Amount: **RM{amount}**\n\n🏦 Pilih bank untuk transfer:",
-                parse_mode="Markdown",
-                reply_markup=bank_selection_keyboard()
+                f"✅ Amount: *RM{amount}*\n\n🏦 Pilih bank:",
+                parse_mode="Markdown", reply_markup=kb_banks()
             )
-        
         except ValueError:
             await update.message.reply_text(
-                "❌ Sila masukkan nombor yang sah. Contoh: 50",
+                "❌ Nombor tidak sah. Contoh: 50",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="auto_deposit")]])
             )
+    else:
+        await update.message.reply_text("Sila tekan /start untuk mula.", reply_markup=kb_reply())
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle photo uploads (receipts)"""
     user_id = update.message.from_user.id
-    
-    if user_id not in user_deposits:
-        await update.message.reply_text("Sila tekan /start untuk mula.", reply_markup=main_menu_keyboard())
+
+    if user_id not in user_deposits or user_deposits[user_id].get("step") != "upload_resit":
+        await update.message.reply_text("⚠️ Sila ikut flow deposit.", reply_markup=kb_home_deposit())
         return
-    
-    deposit = user_deposits[user_id]
-    deposit_data = deposit.get("data", {})
-    
-    # Forward to admin group
-    admin_text = f"""📥 **DEPOSIT BARU!**
 
-👤 Username: {deposit_data.get('username', '?')}
-💰 Amount: RM{deposit_data.get('amount', '?')}
-🏦 Bank: {deposit_data.get('bank', '?')}
-🎁 Promo: {deposit_data.get('promo', '?')}
+    d = user_deposits[user_id]["data"]
+    dep_id = str(uuid.uuid4())[:8]
 
-🕐 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
+    pending_deposits[dep_id] = {
+        "user_id": user_id, "data": d, "status": "pending",
+        "created_at": datetime.now().isoformat(),
+    }
 
-    # Send photo to all admins
+    admin_text = (
+        f"📥 *DEPOSIT BARU!* #{dep_id}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Username: {d.get('username','?')}\n"
+        f"💰 Amount: RM{d.get('amount','?')}\n"
+        f"🏦 Bank: {d.get('bank','?')}\n"
+        f"🎁 Promo: {d.get('promo','?')}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"🆔 User: {user_id}"
+    )
+
     for admin_id in ADMIN_IDS:
         try:
             await context.bot.send_photo(
-                chat_id=admin_id,
-                photo=update.message.photo[-1].file_id,
-                caption=admin_text,
-                parse_mode="Markdown"
+                chat_id=admin_id, photo=update.message.photo[-1].file_id,
+                caption=admin_text, parse_mode="Markdown",
+                reply_markup=kb_cs_actions(dep_id)
             )
         except Exception as e:
-            logger.error(f"Failed to send to admin {admin_id}: {e}")
-    
+            logger.error(f"Send to admin {admin_id} failed: {e}")
+
     await update.message.reply_text(
-        "✅ Resit diterima! Mohon tunggu, CS kami akan semak dan approve/reject. 💬",
-        reply_markup=home_menu_keyboard()
+        f"✅ *RESIT DITERIMA!*\n\n🔖 ID: `#{dep_id}`\n\n"
+        f"⏳ CS akan semak & approve. Tunggu notifikasi ya! 💬",
+        parse_mode="Markdown", reply_markup=kb_home_deposit()
     )
-    
-    # Clear user deposit data
     del user_deposits[user_id]
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
-# ============ ADMIN COMMANDS ==========
-
-async def approve_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Admin only!")
-        return
-    
-    if not context.args:
-        await update.message.reply_text("Usage: /approve <user_id>")
-        return
-    
-    await update.message.reply_text("✅ Deposit approved!")
-
-async def reject_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Admin only!")
-        return
-    
-    if not context.args:
-        await update.message.reply_text("Usage: /reject <user_id>")
-        return
-    
-    await update.message.reply_text("❌ Deposit rejected!")
-
-# ============ MAIN ==========
-
 def main():
     logger.info("Starting S9MY Auto Deposit Bot...")
-    
     app = Application.builder().token(BOT_TOKEN).build()
-    
-    # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
-    app.add_handler(CommandHandler("approve", approve_cmd))
-    app.add_handler(CommandHandler("reject", reject_cmd))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_error_handler(error_handler)
-    
     logger.info("Bot is running...")
     app.run_polling()
 
