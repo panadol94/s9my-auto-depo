@@ -2,13 +2,39 @@ services:
   bot:
     build: .
     container_name: s9my-auto-deposit-bot
-    restart: unless-stopped
-    env_file:
-      - .env
+    restart: always
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-      - PYTHONUNBUFFERED=1
+      - PORT=8080
+      - DATABASE_URL=postgresql://s9my:s9mypass@db:5432/s9my_bot
+      - TZ=Asia/Kuala_Lumpur
+      - LOG_LEVEL=INFO
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+  db:
+    image: postgres:15-alpine
+    container_name: s9my-db
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U s9my -d s9my_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_USER=s9my
+      - POSTGRES_PASSWORD=s9mypass
+      - POSTGRES_DB=s9my_bot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

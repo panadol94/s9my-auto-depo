@@ -1,65 +1,57 @@
 # S9MY Auto Deposit Bot
 
-Telegram bot untuk **99LAJU Auto Deposit System** — automated deposit flow dengan inline keyboards.
+Telegram bot platform untuk **99LAJU Auto Deposit System** — multi-tenant, Flask webhook, PostgreSQL.
 
-## Features
+## Architecture
 
-- 🏠 **Menu Utama** — Daftar ID / Cara Cuci / Game ID / Promosi / Hubungi CS
-- 💰 **Auto Deposit** — Username → Amount → Bank (Affin/RHB) → Promo → Upload Resit
-- ✅ **CS Actions** — Approve/Reject deposit melalui inline buttons
-- 🎮 **Game ID** — Get game ID & password selepas deposit berjaya
-- 🎁 **Promotions** — 120% Welcome, Daily Bonus, Unlimited Bonus, dan lagi
+Same pattern as scanner bot (boda8):
+- **Flask** webhook mode (not polling)
+- **PostgreSQL 15** persistent storage
+- **Multi-tenant** — one deployment, multiple bots via `/addbot`
+- **Customizable messages** — `/setstart`, `/setdepositsuccess`, `/setdepositreject`
+- **Admin group** — CS approve/reject deposits
+- **Docker Compose** — bot + postgres
+
+## Quick Start (Coolify)
+
+1. **Create Resource** → Docker Compose → connect `panadol94/s9my-auto-depo`
+2. **Set Environment**:
+   - `PUBLIC_BASE_URL` = your Coolify domain (e.g. `https://s9my.example.com`)
+   - `DATABASE_URL` = auto from compose
+3. **Deploy**
+4. **Register bot**: Send `/addbot <BOT_TOKEN>` to any registered bot
+5. **Configure**: `/settings` to see all options
 
 ## Bot Commands
 
+### User
 | Command | Description |
 |---------|-------------|
-| `/start` | Mulakan bot, show main menu |
-| `/help` | Bantuan |
-| `/approve <user_id>` | Approve deposit (admin only) |
-| `/reject <user_id>` | Reject deposit (admin only) |
+| `/start` | Register & show menu |
+| `/help` | Help |
 
-## Environment Variables
+### Admin/Owner
+| Command | Description |
+|---------|-------------|
+| `/addbot <token>` | Register new bot |
+| `/settings` | Settings panel + stats |
+| `/setadmingroup` | Set CS group (run in group) |
+| `/addadmin <uid>` | Add CS admin |
+| `/removeadmin <uid>` | Remove CS admin |
+| `/setstart` | Set welcome message (reply) |
+| `/setdepositsuccess` | Set approve message (reply) |
+| `/setdepositreject` | Set reject message (reply) |
+| `/setbank` | Configure bank accounts |
+| `/setmindeposit <amt>` | Set min deposit |
+| `/setaffiliate <link>` | Set affiliate link |
+| `/setcslink <link>` | Set CS contact link |
+| `/setgamelink <link>` | Set game website link |
+| `/stats` | View statistics |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BOT_TOKEN` | Telegram bot token dari @BotFather | — |
-| `ADMIN_IDS` | Comma-separated Telegram user IDs untuk CS/admin | — |
-| `MIN_DEPOSIT` | Minimum deposit amount (RM) | `30` |
-| `BANK_AFFIN_NAME` | Nama akaun Affin Bank | `FARHAN CATERING ENTERPRISE` |
-| `BANK_AFFIN_ACCOUNT` | Nombor akaun Affin Bank | `100180018799` |
-| `BANK_RHB_NAME` | Nama akaun RHB Bank | `FARHAN CATERING ENTERPRISE` |
-| `BANK_RHB_ACCOUNT` | Nombor akaun RHB Bank | `25305200039496` |
+## Deposit Flow
 
-## Deploy via Coolify
-
-1. **Create New Resource** di Coolify → pilih **Docker Compose**
-2. **Connect Repository** → `panadol94/s9my-auto-depo` (branch: `main`)
-3. **Set Environment Variables** di Coolify dashboard:
-   - `BOT_TOKEN` — token dari @BotFather
-   - `ADMIN_IDS` — Telegram user ID admin (comma-separated)
-   - Bank details jika nak tukar dari default
-4. **Deploy** — Coolify akan build dan run container secara automatik
-
-## Local Development
-
-```bash
-# Clone repo
-git clone https://github.com/panadol94/s9my-auto-depo.git
-cd s9my-auto-depo
-
-# Setup environment
-cp .env.example .env
-# Edit .env dengan credentials anda
-
-# Install & run
-pip install -r requirements.txt
-python bot.py
 ```
-
-## Tech Stack
-
-- **Python 3.11** — Runtime
-- **python-telegram-bot 21.6** — Telegram Bot API
-- **Docker** — Containerization
-- **Coolify** — Deployment platform
+/start → Daftar (affiliate link) → Username → Menu
+  └─ Auto Deposit → Amount → Bank → Bank Details → Promo → Upload Resit
+     → CS Approve/Reject → User Notification → Game ID → Play Now
+```

@@ -1,18 +1,15 @@
-FROM python:3.11-alpine
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies first (cache layer)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY bot.py .
-COPY .env.example .
+COPY main.py .
 
-# Health check - verify python process is running
+EXPOSE 8080
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -f "python bot.py" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8080/healthz', timeout=5)" || exit 1
 
-# Run bot
-CMD ["python", "-u", "bot.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "30", "main:app"]
