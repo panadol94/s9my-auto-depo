@@ -77,6 +77,9 @@ def init_db():
       deposit_rejected_text TEXT,
       deposit_rejected_media_type TEXT,
       deposit_rejected_media_file_id TEXT,
+      promo_text TEXT,
+      promo_media_type TEXT,
+      promo_media_file_id TEXT,
       cs_link TEXT DEFAULT 'https://t.me/m/4ujBD3wnZmI1',
       game_link TEXT DEFAULT 'https://99laju.net/',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -685,8 +688,13 @@ def handle_info(bot_row, chat_id, uid, page, msg_id):
         ]}
         edit_msg(token, chat_id, msg_id, txt, reply_markup=kb)
     elif page == "promo":
-        txt = "🎁 <b>SEMUA PROMOSI S9MY</b>\n\n👑 120% Welcome (RM50→Free RM60)\n👑 120% Welcome (RM100→Free RM120)\n1️⃣ 1st Dep — 50% Welcome\n2️⃣ 2nd Dep — 100% Welcome\n🧧 15% Daily Bonus\n💰 6% Unlimited\n💰 10% Unlimited (10pm-6am)\n🍀 No Claim (x1 TO)\n\n💡 Pilih promo semasa deposit!"
-        edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
+        txt = bot_row.get("promo_text") or "🎁 <b>SEMUA PROMOSI S9MY</b>\n\n👑 120% Welcome (RM50→Free RM60)\n👑 120% Welcome (RM100→Free RM120)\n1️⃣ 1st Dep — 50% Welcome\n2️⃣ 2nd Dep — 100% Welcome\n🧧 15% Daily Bonus\n💰 6% Unlimited\n💰 10% Unlimited (10pm-6am)\n🍀 No Claim (x1 TO)\n\n💡 Pilih promo semasa deposit!"
+        mt = bot_row.get("promo_media_type")
+        mf = bot_row.get("promo_media_file_id")
+        if mt and mf:
+            send_media(token, chat_id, mt, mf, caption=txt, reply_markup=kb_home_deposit())
+        else:
+            edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
     elif page == "record":
         txt = "📊 <b>WINNING RECORD</b>\n\n1️⃣ Login website S9MY\n2️⃣ Profile → Wallet\n3️⃣ Semak transaksi"
         edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
@@ -720,7 +728,7 @@ def handle_admin_cmd(bot_row, chat_id, uid, cmd, args, msg):
                f"⏳ Pending: {stats['pending']}\n❌ Rejected: {stats['rejected']}\n"
                f"💰 Total Approved: RM{stats['total_amount']:.2f}\n━━━━━━━━━━━━━━━━━━\n"
                f"<b>Commands:</b>\n/setstart — Set welcome msg\n/setdepositsuccess — Set approve msg\n"
-               f"/setdepositreject — Set reject msg\n/setbank — Set bank details\n"
+               f"/setdepositreject — Set reject msg\n/setpromo — Set promo media\n/setbank — Set bank details\n"
                f"/setmindeposit <i>amount</i>\n/setaffiliate <i>link</i>\n/setcslink <i>link</i>\n"
                f"/setgamelink <i>link</i>\n/setadmingroup — Run in target group\n"
                f"/addadmin <i>user_id</i>\n/removeadmin <i>user_id</i>\n/stats")
@@ -794,7 +802,7 @@ def handle_admin_cmd(bot_row, chat_id, uid, cmd, args, msg):
             c.execute(text("UPDATE bots SET game_link=:l WHERE id=:i"), {"l": args[0], "i": bot_id})
         send_msg(token, chat_id, "✅ Game link updated")
 
-    elif cmd in ("/setstart", "/setdepositsuccess", "/setdepositreject"):
+    elif cmd in ("/setstart", "/setdepositsuccess", "/setdepositreject", "/setpromo"):
         if not require_admin(bot_row, uid): return
         reply = msg.get("reply_to_message")
         if not reply:
@@ -802,7 +810,7 @@ def handle_admin_cmd(bot_row, chat_id, uid, cmd, args, msg):
             return
         mt, mf, txt_content = save_content_from_reply(reply)
         col_map = {"/setstart": ("start", "start"), "/setdepositsuccess": ("deposit_success", "deposit_success"),
-                   "/setdepositreject": ("deposit_rejected", "deposit_rejected")}
+                   "/setdepositreject": ("deposit_rejected", "deposit_rejected"), "/setpromo": ("promo", "promo")}
         prefix = col_map[cmd][1]
         with engine.begin() as c:
             c.execute(text(f"UPDATE bots SET {prefix}_text=:t, {prefix}_media_type=:mt, {prefix}_media_file_id=:mf WHERE id=:i"),
@@ -935,7 +943,7 @@ def telegram_webhook(secret):
             handle_addbot(token, chat_id, uid, args[0])
         elif cmd in ("/settings", "/stats", "/setadmingroup", "/addadmin", "/removeadmin",
                       "/setmindeposit", "/setaffiliate", "/setcslink", "/setgamelink",
-                      "/setstart", "/setdepositsuccess", "/setdepositreject", "/setbank"):
+                      "/setstart", "/setdepositsuccess", "/setdepositreject", "/setpromo", "/setbank"):
             handle_admin_cmd(bot_row, chat_id, uid, cmd, args, msg)
         return "OK", 200
 
