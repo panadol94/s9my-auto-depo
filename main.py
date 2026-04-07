@@ -185,7 +185,6 @@ def auto_register_bot():
     else:
         logger.warning(f"Bot @{bot_username} registered but PUBLIC_BASE_URL not set — webhook skipped")
 
-auto_register_bot()
 
 # ---------------------------
 # UTILS
@@ -376,6 +375,8 @@ def add_default_promos(bot_id):
                 VALUES (:b, :k, :l, :s) ON CONFLICT DO NOTHING
             """), {"b": bot_id, "k": key, "l": label, "s": sort})
 
+
+auto_register_bot()
 def save_content_from_reply(msg):
     txt = msg.get("text") or msg.get("caption") or ""
     mt, mf = None, None
