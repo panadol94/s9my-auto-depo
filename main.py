@@ -748,8 +748,14 @@ def send_promo_card(bot_row, chat_id, promo_idx, msg_id=None):
     
     # Send new message with photo
     send_media(token, chat_id, "photo", promo["image_id"], caption=caption, reply_markup=kb)
+    return
 
-    elif page == "record":
+def handle_info(bot_row, chat_id, uid, page, msg_id):
+    token = bot_row["token"]
+    game_link = bot_row.get("game_link") or "https://99laju.net/"
+    cs_link = bot_row.get("cs_link") or "https://t.me/m/4ujBD3wnZmI1"
+
+    if page == "cuci":
         txt = "📊 <b>WINNING RECORD</b>\n\n1️⃣ Login website S9MY\n2️⃣ Profile → Wallet\n3️⃣ Semak transaksi"
         edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
     elif page == "cs":
