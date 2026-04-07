@@ -49,6 +49,28 @@ TG_API = "https://api.telegram.org/bot{token}/{method}"
 SESSION = requests.Session()
 
 # ---------------------------
+# DEFAULT PROMOS (Image + Text)
+# ---------------------------
+DEFAULT_PROMOS = [
+    {
+        "image_id": "AgACAgUAAxkDAANxadVZKr28bHpyIJ59mm0tjAkTWF0AAl8NaxvltKhW1f5QCu0lAosBAAMCAAN5AAM7BA",
+        "text": "🎉【120% WELCOME BONUS】🎉\n\n💰 First Deposit Get EXTRA CREDIT upto RM120 !\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n✨ 2 Package For Choosing\n\n📦 Package 1\n\n💵 Topup RM50 👉🏻 Dapat RM110\n🔄 Min withdraw : RM330\n⏹️ Max withdraw : RM500\n\n📦 Package 2\n💵 Topup RM100 👉🏻 Dapat RM220\n🔄 Min withdraw : RM660\n⏹️ Max withdraw : RM1,000\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n📌 Term n Condition\n✅ Min Deposit : RM50\n🎰 Only for Slot Game\n🔁 Min withdraw : 3x Winover\n🔁 Max withdraw : 6x Winover"
+    },
+    {
+        "image_id": "AgACAgUAAxkDAAO2adVx85d66_vzU494soIR26wTW9sAAmoNaxvltKhWjwSRaKzXmxEBAAMCAAN5AAM7BA",
+        "text": "🎉【Daily Bonus upto 60% 】🎉\n\n✅ 15% bonus claimable up to 4 times daily\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n💵 Topup RM50 👉🏻 RM57.50\n💵 Topup RM100 👉🏻 RM115\n💵 Topup RM150 👉🏻 RM172.50\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n📌 Term n Condition\n✅ Min Topup RM50\n🎰 For Slot Games only\n🔁 Min Withdrawal = x3 WinOver\n🔁 Max Withdrawal = x50 WinOver"
+    },
+    {
+        "image_id": "AgACAgUAAxkDAAO3adVx9CWy5CMPooBD91Yx5StB9hMAAmsNaxvltKhW7lbe0hq09B0BAAMCAAN5AAM7BA",
+        "text": "🎉【 50% + 100% Welcome Bonus 】🎉\n\n💰 First & Second Deposit Get EXTRA CREDIT \n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n1️⃣ First Deposit Get 50% Bonus\n\n🔹 Deposit RM50 Get 75 Credit\n🔹 Deposit RM100 Get 150 Credit\n🔹 Deposit RM200 Get 300 Credit\n\n2️⃣ Second Deposit Get 100% Bonus\n\n🔹 Deposit RM50 Get 100 Credit\n🔹 Deposit RM100 Get 200 Credit\n🔹 Deposit RM200 Get 400 Credit\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n📌 Term n Condition\n✅ Min Topup RM50\n🎰 For Slot Games only\n🔁 Min Withdrawal = x3 WinOver"
+    },
+    {
+        "image_id": "AgACAgUAAxkDAAO4adVx9RIfVZ7-Mzxss7O8WPq8gnUAAmwNaxvltKhWpFkfkwXUxoMBAAMCAAN5AAM7BA",
+        "text": "🎉【 Whole Day Unlimited Bonus 】🎉\n\n💰 Deposit Every Time & Get Extra with Low T&Cs\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n⏰ 06:00 AM – 10:00 PM → Get 6% Unlimited Bonus\n\n🔹 Deposit RM50 → Get RM53 Credit\n🔹 Deposit RM100 → Get RM106 Credit\n🔹 Deposit RM200 → Get RM212 Credit\n\n⏰ 10:00 PM – 06:00 AM → Get 10% Unlimited Bonus\n\n🔹 Deposit RM50 → Get RM55 Credit\n🔹 Deposit RM100 → Get RM110 Credit\n🔹 Deposit RM200 → Get RM220 Credit\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n📌 Term n Condition\n✅ Min Topup RM50\n🎰 For Slot Games only\n🔁 Min Withdrawal = x100 WinOver"
+    }
+]
+
+# ---------------------------
 # DB INIT
 # ---------------------------
 def init_db():
@@ -688,13 +710,45 @@ def handle_info(bot_row, chat_id, uid, page, msg_id):
         ]}
         edit_msg(token, chat_id, msg_id, txt, reply_markup=kb)
     elif page == "promo":
-        txt = bot_row.get("promo_text") or "🎁 <b>SEMUA PROMOSI S9MY</b>\n\n👑 120% Welcome (RM50→Free RM60)\n👑 120% Welcome (RM100→Free RM120)\n1️⃣ 1st Dep — 50% Welcome\n2️⃣ 2nd Dep — 100% Welcome\n🧧 15% Daily Bonus\n💰 6% Unlimited\n💰 10% Unlimited (10pm-6am)\n🍀 No Claim (x1 TO)\n\n💡 Pilih promo semasa deposit!"
-        mt = bot_row.get("promo_media_type")
-        mf = bot_row.get("promo_media_file_id")
-        if mt and mf:
-            send_media(token, chat_id, mt, mf, caption=txt, reply_markup=kb_home_deposit())
-        else:
-            edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
+        # Show first promo card with navigation
+        promo_idx = 0
+        send_promo_card(bot_row, chat_id, promo_idx, msg_id=msg_id)
+        return
+
+def send_promo_card(bot_row, chat_id, promo_idx, msg_id=None):
+    token = bot_row["token"]
+    promo = DEFAULT_PROMOS[promo_idx]
+    total = len(DEFAULT_PROMOS)
+    
+    # Build navigation keyboard
+    kb_rows = []
+    nav_row = []
+    if promo_idx > 0:
+        nav_row.append({"text": "⬅️ Prev", "callback_data": f"promocard:{promo_idx-1}"})
+    nav_row.append({"text": f"{promo_idx+1}/{total}", "callback_data": "noop"})
+    if promo_idx < total - 1:
+        nav_row.append({"text": "Next ➡️", "callback_data": f"promocard:{promo_idx+1}"})
+    kb_rows.append(nav_row)
+    
+    # Add action buttons
+    kb_rows.append([{"text": "💰 Auto Deposit", "callback_data": "deposit"}])
+    kb_rows.append([{"text": "🏠 Menu Utama", "callback_data": "menu"}])
+    
+    kb = {"inline_keyboard": kb_rows}
+    
+    caption = promo["text"][:TG_MAX_CAPTION]  # Truncate to max caption length
+    
+    if msg_id:
+        # Try to edit existing message, fallback to delete+send
+        try:
+            edit_msg(token, chat_id, msg_id, caption, reply_markup=kb)
+            return
+        except:
+            pass
+    
+    # Send new message with photo
+    send_media(token, chat_id, "photo", promo["image_id"], caption=caption, reply_markup=kb)
+
     elif page == "record":
         txt = "📊 <b>WINNING RECORD</b>\n\n1️⃣ Login website S9MY\n2️⃣ Profile → Wallet\n3️⃣ Semak transaksi"
         edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
@@ -907,6 +961,9 @@ def telegram_webhook(secret):
                 handle_deposit_start(bot_row, chat_id, uid, msg_id)
             else:
                 handle_bank(bot_row, chat_id, uid, bk, msg_id)
+        elif cb_data.startswith("promocard:"):
+            idx = int(cb_data.split(":")[1])
+            send_promo_card(bot_row, chat_id, idx, msg_id=msg_id)
         elif cb_data.startswith("promo:"):
             handle_promo(bot_row, chat_id, uid, cb_data.split(":")[1], msg_id)
         elif cb_data.startswith("info:"):
