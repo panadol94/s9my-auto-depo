@@ -427,12 +427,13 @@ def get_deposit_stats(bot_id):
 # ---------------------------
 def kb_main_menu():
     return {"inline_keyboard": [
-        [{"text": "💰 Auto Deposit", "callback_data": "deposit"}],
-        [{"text": "🧼 Cara Cuci", "callback_data": "info:cuci"}],
-        [{"text": "🎮 Cari Game ID", "callback_data": "info:gameid"}],
-        [{"text": "🎁 Claim Promotion", "callback_data": "info:promo"}],
-        [{"text": "📊 Winning Record", "callback_data": "info:record"}],
-        [{"text": "💬 Hubungi CS", "callback_data": "info:cs"}],
+        [{"text": "🆕 Register ID Now", "url": "https://s9my.com/register?affiliate=118755"}],
+        [{"text": "💰 Deposit", "callback_data": "deposit"}],
+        [{"text": "💸 Withdraw", "callback_data": "withdraw"}],
+        [{"text": "🆔 GAME ID", "callback_data": "info:gameid"}],
+        [{"text": "🎁 Promotion List", "callback_data": "info:promo"}],
+        [{"text": "🏆 Winning Record", "url": "https://t.me/s9asia_sejak2015"}],
+        [{"text": "📞 Contact CS", "url": "https://t.me/m/XRkTMbOkNWNl"}],
     ]}
 
 def kb_reply_persistent():
@@ -504,7 +505,7 @@ def handle_start(bot_row, chat_id, uid, user_from):
 
     if user_row and user_row.get("game_username"):
         name = user_row["game_username"]
-        txt = bot_row.get("start_text") or f"🎰 ✨ SELAMAT KEMBALI, <b>{_h(name)}</b>! ✨ 🎰\n🤖 Auto Deposit Bot — Laju, Mudah, 24/7!\n\n👇 Pilih pilihan di bawah:"
+        txt = bot_row.get("start_text") or f"🤖 Welcome to S9MY AI Auto Deposit BOT\n\n⚡️ Faster • 🔒 Safer • 🕒 24/7 Running\n\n━━━━━━━━━━━━━━━\n\n🌟 Why Should You Play with S9MY?\n\n🇲🇾 Trusted Brand in Malaysia\n🎯 11 Years of Experience in the Industry\n\n💰 Deposit in 1 Minute\n💸 Withdraw in 5 Minutes\n🌐 Online 24/7\n🎁 Latest Promotions Available\n\n━━━━━━━━━━━━━━━\n\n❓ What would you like to do?\n👇 Please choose an option below 👇"
         mt = bot_row.get("start_media_type")
         mf = bot_row.get("start_media_file_id")
         send_or_media(token, chat_id, mt, mf, txt, reply_markup=kb_main_menu())
@@ -950,6 +951,19 @@ def telegram_webhook(secret):
             handle_menu(bot_row, chat_id, uid, msg_id)
         elif cb_data == "deposit":
             handle_deposit_start(bot_row, chat_id, uid, msg_id)
+        elif cb_data == "withdraw":
+            txt = ("💰 <b>Follow the Steps for Withdrawal</b>\n\n"
+                   "Once you have submitted your request, your withdrawal will be processed within a few minutes.\n\n"
+                   "📌 Steps:\n\n"
+                   "1️⃣ Login to our website\n"
+                   "2️⃣ Click \"Withdrawal\"\n"
+                   "3️⃣ Click \"OK\" & enter your bank account details\n"
+                   "4️⃣ Return to \"Withdrawal\" & enter the withdrawal amount\n"
+                   "5️⃣ Click \"Submit\" — our CS will verify & process your request\n\n"
+                   "⚡️ Once completed, you will receive a notification from your bank\n\n"
+                   "❓ Having issues or need assistance?\n"
+                   "👉 Contact our Customer Service now")
+            edit_msg(token, chat_id, msg_id, txt, reply_markup=kb_home_deposit())
         elif cb_data.startswith("amt:"):
             val = cb_data.split(":")[1]
             if val == "custom":
