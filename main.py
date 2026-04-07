@@ -29,6 +29,8 @@ DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "3"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "7"))
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 SERVICE_NAME = os.getenv("SERVICE_NAME", "s9my-bot")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+OWNER_ID = os.getenv("OWNER_ID", "").strip()
 TG_MAX_TEXT = 4096
 TG_MAX_CAPTION = 1024
 
@@ -138,6 +140,52 @@ def init_db():
     logger.info("DB Init OK")
 
 init_db()
+
+def auto_register_bot():
+    """Auto-register first bot from BOT_TOKEN env var on startup."""
+    if not BOT_TOKEN:
+        logger.warning("BOT_TOKEN not set — skip auto-register")
+        return
+    existing = get_bot_by_token(BOT_TOKEN)
+    if existing:
+        logger.info(f"Bot @{existing.get('bot_username','')} already registered")
+        return
+    # Verify token
+    try:
+        r = SESSION.post(TG_API.format(token=BOT_TOKEN, method="getMe"), timeout=15)
+        js = r.json()
+        if not js.get("ok"):
+            logger.error(f"getMe failed: {js}")
+            return
+        me = js["result"]
+    except Exception as e:
+        logger.error(f"Auto-register getMe error: {e}")
+        return
+    bot_username = me.get("username", "")
+    owner = int(OWNER_ID) if OWNER_ID else 0
+    secret = str(uuid.uuid4())
+    with engine.begin() as c:
+        c.execute(text("""
+            INSERT INTO bots (token, bot_username, secret_token, owner_id)
+            VALUES (:t, :u, :s, :o)
+        """), {"t": BOT_TOKEN, "u": bot_username, "s": secret, "o": owner})
+    bot_row = get_bot_by_token(BOT_TOKEN)
+    if bot_row:
+        add_default_promos(str(bot_row["id"]))
+    # Set webhook
+    if PUBLIC_BASE_URL:
+        wh_url = f"{PUBLIC_BASE_URL}/telegram/{secret}"
+        try:
+            SESSION.post(TG_API.format(token=BOT_TOKEN, method="setWebhook"),
+                        data={"url": wh_url, "secret_token": secret,
+                              "allowed_updates": json.dumps(["message", "callback_query"])}, timeout=15)
+            logger.info(f"✅ Bot @{bot_username} auto-registered! Webhook: {wh_url}")
+        except Exception as e:
+            logger.error(f"Webhook set error: {e}")
+    else:
+        logger.warning(f"Bot @{bot_username} registered but PUBLIC_BASE_URL not set — webhook skipped")
+
+auto_register_bot()
 
 # ---------------------------
 # UTILS
@@ -412,6 +460,20 @@ def kb_home_deposit():
 def handle_start(bot_row, chat_id, uid, user_from):
     token = bot_row["token"]
     bot_id = str(bot_row["id"])
+
+    # --- Auto-claim owner: first /start user becomes owner ---
+    if int(bot_row.get("owner_id", 0)) == 0:
+        with engine.begin() as c:
+            c.execute(text("UPDATE bots SET owner_id=:o WHERE id=:i"), {"o": uid, "i": bot_id})
+        bot_row = get_bot_by_id(bot_id) or bot_row
+        send_msg(token, chat_id,
+                 f"👑 <b>ANDA ADALAH OWNER BOT INI!</b>\n\n"
+                 f"🆔 Owner ID: <code>{uid}</code>\n\n"
+                 f"Guna /settings untuk configure bot.\n"
+                 f"Guna /setadmingroup di dalam group untuk set admin group.\n\n"
+                 f"Tekan /start sekali lagi untuk mula.")
+        return
+
     user_row = get_user(bot_id, uid)
 
     if user_row and user_row.get("game_username"):
@@ -427,6 +489,7 @@ def handle_start(bot_row, chat_id, uid, user_from):
         txt = f"🆕 Daftar Sekarang di sini 👇\n🔗 {aff}\n\n🧑 Sila masukkan Username 99LAJU anda :"
         set_state(bot_id, uid, "register")
         send_msg(token, chat_id, txt, reply_markup=kb_reply_persistent())
+
 
 def handle_menu(bot_row, chat_id, uid, msg_id=None):
     token = bot_row["token"]

@@ -14,6 +14,8 @@ services:
       - TZ=Asia/Kuala_Lumpur
       - LOG_LEVEL=INFO
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - OWNER_ID=${OWNER_ID}
     logging:
       driver: json-file
       options:
