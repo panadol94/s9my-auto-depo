@@ -85,7 +85,7 @@ def init_db():
       owner_id BIGINT NOT NULL,
       admin_group_id BIGINT,
       min_deposit NUMERIC NOT NULL DEFAULT 30,
-      affiliate_link TEXT DEFAULT 'https://99laju.net/register?affiliate=911295',
+      affiliate_link TEXT DEFAULT 'https://s9my.com/register?affiliate=118755',
       bank_affin_name TEXT DEFAULT 'FARHAN CATERING ENTERPRISE',
       bank_affin_account TEXT DEFAULT '100180018799',
       bank_rhb_name TEXT DEFAULT 'FARHAN CATERING ENTERPRISE',
@@ -102,8 +102,8 @@ def init_db():
       promo_text TEXT,
       promo_media_type TEXT,
       promo_media_file_id TEXT,
-      cs_link TEXT DEFAULT 'https://t.me/m/4ujBD3wnZmI1',
-      game_link TEXT DEFAULT 'https://99laju.net/',
+      cs_link TEXT DEFAULT 'https://t.me/m/XRkTMbOkNWNl',
+      game_link TEXT DEFAULT 'https://s9my.com/',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -511,8 +511,8 @@ def handle_start(bot_row, chat_id, uid, user_from):
         send_msg(token, chat_id, "⬇️", reply_markup=kb_reply_persistent())
     else:
         upsert_user(bot_id, user_from)
-        aff = bot_row.get("affiliate_link") or "https://99laju.net/register?affiliate=911295"
-        txt = f"🆕 Daftar Sekarang di sini 👇\n🔗 {aff}\n\n🧑 Sila masukkan Username 99LAJU anda :"
+        aff = bot_row.get("affiliate_link") or "https://s9my.com/register?affiliate=118755"
+        txt = f"🆕 Daftar Sekarang di sini 👇\n🔗 {aff}\n\n🧑 Sila masukkan Username S9MY anda :"
         set_state(bot_id, uid, "register")
         send_msg(token, chat_id, txt, reply_markup=kb_reply_persistent())
 
@@ -535,7 +535,7 @@ def handle_deposit_start(bot_row, chat_id, uid, msg_id=None):
     user_row = get_user(bot_id, uid)
     if not user_row or not user_row.get("game_username"):
         set_state(bot_id, uid, "register")
-        send_msg(token, chat_id, "⚠️ Sila daftar username dulu.\nTaipkan username 99LAJU anda:")
+        send_msg(token, chat_id, "⚠️ Sila daftar username dulu.\nTaipkan username S9MY anda:")
         return
     clear_state(bot_id, uid)
     set_state(bot_id, uid, "deposit_amount", {"game_username": user_row["game_username"]})
@@ -648,7 +648,7 @@ def handle_cs_action(bot_row, chat_id, uid, action, dep_id, msg_id, cb_id):
         return
 
     target_uid = int(dep["user_id"])
-    game_link = bot_row.get("game_link") or "https://99laju.net/"
+    game_link = bot_row.get("game_link") or "https://s9my.net/"
     cs_link = bot_row.get("cs_link") or "https://t.me/m/4ujBD3wnZmI1"
 
     if action == "approve":
@@ -696,7 +696,7 @@ def handle_cs_action(bot_row, chat_id, uid, action, dep_id, msg_id, cb_id):
 # ---------------------------
 def handle_info(bot_row, chat_id, uid, page, msg_id):
     token = bot_row["token"]
-    game_link = bot_row.get("game_link") or "https://99laju.net/"
+    game_link = bot_row.get("game_link") or "https://s9my.net/"
     cs_link = bot_row.get("cs_link") or "https://t.me/m/4ujBD3wnZmI1"
 
     if page == "cuci":
@@ -752,7 +752,7 @@ def send_promo_card(bot_row, chat_id, promo_idx, msg_id=None):
 
 def handle_info(bot_row, chat_id, uid, page, msg_id):
     token = bot_row["token"]
-    game_link = bot_row.get("game_link") or "https://99laju.net/"
+    game_link = bot_row.get("game_link") or "https://s9my.net/"
     cs_link = bot_row.get("cs_link") or "https://t.me/m/4ujBD3wnZmI1"
 
     if page == "cuci":
