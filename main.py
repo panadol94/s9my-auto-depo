@@ -525,7 +525,7 @@ def handle_amount(bot_row, chat_id, uid, amount, msg_id):
     token = bot_row["token"]
     bot_id = str(bot_row["id"])
     st = get_state(bot_id, uid)
-    payload = json.loads(st["payload"]) if st and st.get("payload") else {}
+    payload = (st["payload"] if isinstance(st["payload"], dict) else json.loads(st["payload"])) if st and st.get("payload") else {}
     payload["amount"] = amount
     set_state(bot_id, uid, "deposit_bank", payload)
     txt = f"✅ Amount: <b>RM{amount}</b>\n\n🏦 Pilih bank untuk transfer:"
@@ -544,7 +544,7 @@ def handle_bank(bot_row, chat_id, uid, bank_key, msg_id):
         acc_num = bot_row.get("bank_rhb_account") or "25305200039496"
 
     st = get_state(bot_id, uid)
-    payload = json.loads(st["payload"]) if st and st.get("payload") else {}
+    payload = (st["payload"] if isinstance(st["payload"], dict) else json.loads(st["payload"])) if st and st.get("payload") else {}
     payload["bank"] = bank_name
     payload["bank_acc_name"] = acc_name
     payload["bank_acc_num"] = acc_num
@@ -564,7 +564,7 @@ def handle_promo(bot_row, chat_id, uid, promo_key, msg_id):
     promo_label = next((p["label"] for p in promos if p["key"] == promo_key), promo_key)
 
     st = get_state(bot_id, uid)
-    payload = json.loads(st["payload"]) if st and st.get("payload") else {}
+    payload = (st["payload"] if isinstance(st["payload"], dict) else json.loads(st["payload"])) if st and st.get("payload") else {}
     payload["promo"] = promo_label
     set_state(bot_id, uid, "upload_resit", payload)
 
@@ -586,7 +586,7 @@ def handle_receipt(bot_row, chat_id, uid, file_id):
     if not st or st.get("state") != "upload_resit":
         send_msg(token, chat_id, "⚠️ Sila ikut flow deposit.", reply_markup=kb_home_deposit())
         return
-    payload = json.loads(st["payload"]) if st.get("payload") else {}
+    payload = (st["payload"] if isinstance(st["payload"], dict) else json.loads(st["payload"])) if st.get("payload") else {}
     dep_id = create_deposit(bot_id, uid, payload.get("game_username"), payload.get("amount", 0),
                             payload.get("bank"), payload.get("promo"), file_id)
     clear_state(bot_id, uid)
@@ -886,7 +886,7 @@ def telegram_webhook(secret):
             val = cb_data.split(":")[1]
             if val == "custom":
                 st = get_state(bot_id, uid)
-                payload = json.loads(st["payload"]) if st and st.get("payload") else {}
+                payload = (st["payload"] if isinstance(st["payload"], dict) else json.loads(st["payload"])) if st and st.get("payload") else {}
                 set_state(bot_id, uid, "custom_amount", payload)
                 mn = int(bot_row.get("min_deposit") or 30)
                 edit_msg(token, chat_id, msg_id, f"✏️ <b>Custom Amount</b>\n\nTaipkan jumlah deposit (Min: RM{mn}):",
@@ -951,7 +951,7 @@ def telegram_webhook(secret):
     st = get_state(bot_id, uid)
     if st:
         state = st.get("state", "")
-        payload = json.loads(st["payload"]) if st.get("payload") else {}
+        payload = (st["payload"] if isinstance(st["payload"], dict) else json.loads(st["payload"])) if st.get("payload") else {}
 
         if state == "register":
             game_un = text_
