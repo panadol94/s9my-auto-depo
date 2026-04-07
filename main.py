@@ -70,6 +70,9 @@ DEFAULT_PROMOS = [
     }
 ]
 
+# Default welcome menu image
+DEFAULT_START_IMAGE = "AgACAgUAAxkDAAPLadV5EzPQoudYaL8QHh_yXH0-yg4AAnENaxvltKhWup1A9luj6xYBAAMCAAN5AAM7BA"
+
 # ---------------------------
 # DB INIT
 # ---------------------------
@@ -506,8 +509,8 @@ def handle_start(bot_row, chat_id, uid, user_from):
     if user_row and user_row.get("game_username"):
         name = user_row["game_username"]
         txt = bot_row.get("start_text") or f"🤖 Welcome to S9MY AI Auto Deposit BOT\n\n⚡️ Faster • 🔒 Safer • 🕒 24/7 Running\n\n━━━━━━━━━━━━━━━\n\n🌟 Why Should You Play with S9MY?\n\n🇲🇾 Trusted Brand in Malaysia\n🎯 11 Years of Experience in the Industry\n\n💰 Deposit in 1 Minute\n💸 Withdraw in 5 Minutes\n🌐 Online 24/7\n🎁 Latest Promotions Available\n\n━━━━━━━━━━━━━━━\n\n❓ What would you like to do?\n👇 Please choose an option below 👇"
-        mt = bot_row.get("start_media_type")
-        mf = bot_row.get("start_media_file_id")
+        mt = bot_row.get("start_media_type") or "photo"
+        mf = bot_row.get("start_media_file_id") or DEFAULT_START_IMAGE
         send_or_media(token, chat_id, mt, mf, txt, reply_markup=kb_main_menu())
         send_msg(token, chat_id, "⬇️", reply_markup=kb_reply_persistent())
     else:
