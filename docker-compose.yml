@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       - PORT=8080
-      - DATABASE_URL=postgresql://s9my:s9mypass@10.0.1.19:5432/s9my_bot
+      - DATABASE_URL=postgresql://s9my:s9mypass@dw869cxr65y2ucja40f0e04n:5432/s9my_bot
       - TZ=Asia/Kuala_Lumpur
       - LOG_LEVEL=INFO
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
