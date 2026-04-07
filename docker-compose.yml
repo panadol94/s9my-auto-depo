@@ -3,6 +3,8 @@ services:
     build: .
     container_name: s9my-auto-deposit-bot
     restart: always
+    networks:
+      - coolify
     environment:
       - PORT=8080
       - DATABASE_URL=postgresql://s9my:s9mypass@dw869cxr65y2ucja40f0e04n:5432/s9my_bot
@@ -16,3 +18,7 @@ services:
       options:
         max-size: 10m
         max-file: '3'
+
+networks:
+  coolify:
+    external: true
